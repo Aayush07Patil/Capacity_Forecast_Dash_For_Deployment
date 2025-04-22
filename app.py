@@ -295,7 +295,7 @@ def update_graph(n_intervals):
 
         # Update layout with dual Y-axis
         fig.update_layout(
-            title=f'Cargo Trend and Forecast for Flight {f_no} ({origin} → {destination})',
+            title=f'Cargo Trend and Forecast',
             xaxis_title='Date',
             yaxis=dict(
                 title='Weight (kg)',
@@ -314,7 +314,7 @@ def update_graph(n_intervals):
                 tickformat='%d %b',
             ),
             legend=dict(
-                x=1.02,        # Just outside the right side
+                x=1.05,        # Just outside the right side
                 y=1,           # Align to top
                 xanchor='left',
                 yanchor='top',
