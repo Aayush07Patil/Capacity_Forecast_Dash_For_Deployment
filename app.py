@@ -1,21 +1,15 @@
-import dash
-from dash import dcc, html, Input, Output, State, callback
-import plotly.express as px
-import plotly.graph_objects as go
+import pyodbc
 import pandas as pd
-from datetime import datetime, timedelta
-from flask import request, jsonify
+from datetime import date, timedelta, datetime
+import plotly.graph_objects as go
+from dash import Dash, html, dcc, Input, Output, State, callback
+import dash_bootstrap_components as dbc
+import dash
 import os
+from flask import request, jsonify
 
-# Try to import pyodbc, but provide alternative if it fails
-try:
-    import pyodbc
-except ImportError:
-    print("pyodbc not installed. Using sample data only.")
-    pyodbc = None
-
-# Initialize the Dash app
-app = dash.Dash(__name__, title="Flight Capacity Dashboard", suppress_callback_exceptions=True)
+# Dash app setup
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 server = app.server  # Expose Flask server to add custom routes
 
 # Global variables to store the last received data
@@ -26,125 +20,53 @@ current_flight_data = {
     "flight_destination": ""
 }
 
-# Create the layout (now without input fields)
+# Database connection setup
+def get_connection():
+    # For production, use environment variables for these values
+    server = os.getenv("DB_SERVER", "qidtestingindia.database.windows.net")
+    database = os.getenv("DB_NAME", "rm-demo-erp-db")
+    username = os.getenv("DB_USERNAME", "rmdemodeploymentuser")
+    password = os.getenv("DB_PASSWORD", "rm#demo#2515")
+    conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        f'SERVER={server};'
+        f'DATABASE={database};'
+        f'UID={username};'
+        f'PWD={password};'
+        'Encrypt=yes;'
+        'TrustServerCertificate=no;'
+        'Connection Timeout=30;'
+    )
+    return pyodbc.connect(conn_str)
+
+# Layout - simplified without input fields
 app.layout = html.Div([
+    # No title or information display - clean interface for iframe embedding
     
-    html.Div([
-        dcc.Loading(
-            id="loading-graphs",
-            type="circle",
-            children=[
-                html.Div([
-                    html.H3("Flight Capacity Forecast", style={"textAlign": "center"}),
-                    dcc.Graph(id="combined-graph")
-                ], style={"width": "100%", "display": "inline-block"})
-            ]
-        )
-    ], style={"marginTop": "20px"}),
-    
-    # Hidden div to store the flight data from the .NET application
-    html.Div(id="flight-data-store", style={"display": "none"}),
+    # Graph container with responsive layout
+    html.Div(
+        id="graph-container",
+        style={
+            "width": "100%", 
+            "height": "100vh",  # Use viewport height
+            "padding": "0px",   # Remove padding
+            "margin": "0px"     # Remove margin
+        }
+    ),
     
     # Add interval component to trigger updates periodically
     dcc.Interval(
         id='interval-component',
-        interval=180000,# in milliseconds (3 minutes)
+        interval=180000,  # in milliseconds (3 minutes)
         n_intervals=0
     )
-])
-
-# Function to connect to the database and get data
-def get_flight_data(flight_no, flight_date, origin, destination):
-    # For demonstration purposes, if DB connection fails, use sample data
-    try:
-        # For Azure SQL Database, Windows Authentication (Trusted_Connection) won't work
-        # We need to use SQL Authentication with the proper driver
-        try:
-            # Method 1: Using ODBC Driver 17 (recommended for Azure SQL)
-            conn = pyodbc.connect(
-                'DRIVER={ODBC Driver 17 for SQL Server};'
-                'SERVER=qidtestingindia.database.windows.net;'  # Remove the port from server name
-                'DATABASE=rm-demo-erp-db;'
-                'UID=rmdemodeploymentuser;'  # Replace with actual username
-                'PWD=rm#demo#2515;'  # Replace with actual password
-                'Encrypt=yes;'  # Required for Azure SQL
-                'TrustServerCertificate=no;'
-                'Connection Timeout=30;'
-            )
-        except Exception as e1:
-            print(f"First connection attempt failed: {e1}")
-            try:
-                # Method 2: Using SQL Server driver as fallback
-                conn = pyodbc.connect(
-                    'DRIVER={SQL Server};'
-                    'SERVER=qidtestingindia.database.windows.net;'  # Remove the port from server name
-                    'DATABASE=rm-demo-erp-db;'
-                    'UID=rmdemodeploymentuser;'  # Replace with actual username
-                    'PWD=rm#demo#2515;'  # Replace with actual password
-                    'Encrypt=yes;'  # Required for Azure SQL
-                )
-            except Exception as e2:
-                print(f"Second connection attempt failed: {e2}")
-                # If both connection methods fail, raise exception to use sample data
-                raise Exception("Cannot connect to database")
-        
-        # Create a cursor
-        cursor = conn.cursor()
-        
-        # Format the date for SQL query
-        formatted_date = flight_date.strftime("%Y-%m-%d") if isinstance(flight_date, datetime) else flight_date
-        
-        # Construct and execute the query to get the next 15 instances
-        query = """
-        SELECT TOP 15 FltNo, FltDate, Origin, Destination, ReportWeight, ReportVolume
-        FROM dbo.CapacityTransaction
-        WHERE FltNo = ?
-        AND Origin = ?
-        AND Destination = ?
-        AND FltDate >= ?
-        ORDER BY FltDate
-        """
-        
-        cursor.execute(query, (flight_no, origin, destination, formatted_date))
-        
-        # Fetch all results
-        rows = cursor.fetchall()
-        
-        # Create DataFrame from results
-        columns = [column[0] for column in cursor.description]
-        df = pd.DataFrame.from_records(rows, columns=columns)
-        
-        # Close cursor and connection
-        cursor.close()
-        conn.close()
-        
-        return df
-        
-    except Exception as e:
-        print(f"Database error: {e}")
-        print("Using sample data instead...")
-        
-        # Generate sample data for demonstration
-        # Convert flight_date to datetime object if it's a string
-        if isinstance(flight_date, str):
-            try:
-                flight_date = datetime.strptime(flight_date.split('T')[0], "%Y-%m-%d").date()
-            except ValueError:
-                flight_date = datetime.now().date()
-        
-        sample_dates = [flight_date + timedelta(days=i) for i in range(15)]
-        
-        # Create sample data
-        sample_data = {
-            'FltNo': [flight_no] * 15,
-            'FltDate': sample_dates,
-            'Origin': [origin] * 15,
-            'Destination': [destination] * 15,
-            'ReportWeight': [round(1000 + i * 50 + (100 * (i % 3)), 2) for i in range(15)],  # Random-ish weights
-            'ReportVolume': [round(500 + i * 25 + (50 * (i % 4)), 2) for i in range(15)]     # Random-ish volumes
-        }
-        
-        return pd.DataFrame(sample_data)
+], style={
+    "width": "100%",
+    "height": "100vh",  # Use full viewport height
+    "padding": "0px",   # Remove padding
+    "margin": "0px",    # Remove margin
+    "overflow": "hidden" # Prevent scrollbars
+})
 
 # API endpoint to receive data from .NET application
 @server.route('/update-data', methods=['POST'])
@@ -171,116 +93,280 @@ def update_data():
         print(f"Error processing data: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
 
+# Removed callback for displaying flight information as we no longer have those UI elements
+
 # Callback to update the graph based on stored flight data
 @callback(
-    Output("combined-graph", "figure"),
+    Output("graph-container", "children"),
     [Input("interval-component", "n_intervals")]
 )
-def update_graphs(n_intervals):
+def update_graph(n_intervals):
     # Get the current flight data
-    flight_no = current_flight_data["flight_no"]
-    flight_date = current_flight_data["flight_date"]
+    f_no = current_flight_data["flight_no"]
+    f_date = current_flight_data["flight_date"]
     origin = current_flight_data["flight_origin"]
     destination = current_flight_data["flight_destination"]
     
     # Check if we have all required data
-    if not all([flight_no, flight_date, origin, destination]):
-        # Return empty figure if missing data
-        empty_fig = go.Figure()
-        empty_fig.update_layout(
-            xaxis={"visible": False},
-            yaxis={"visible": False},
-            annotations=[{
-                "text": "Waiting for flight data...",
-                "showarrow": False,
-                "font": {"size": 16}
-            }]
-        )
-        
-        return empty_fig
+    if not all([f_no, f_date, origin, destination]):
+        # Return empty message if missing data
+        return html.Div("Waiting for flight data...", className="text-center p-5")
     
-    # Get data from database
-    df = get_flight_data(flight_no, flight_date, origin, destination)
-    
-    if df.empty:
-        # Return empty figure if no data
-        empty_fig = go.Figure()
-        empty_fig.update_layout(
-            xaxis={"visible": False},
-            yaxis={"visible": False},
-            annotations=[{
-                "text": "No data found for the given parameters.",
-                "showarrow": False,
-                "font": {"size": 16}
-            }]
-        )
-        
-        return empty_fig
-    
-    # Convert FltDate to datetime if it's not already
-    if not pd.api.types.is_datetime64_any_dtype(df['FltDate']):
-        df['FltDate'] = pd.to_datetime(df['FltDate'])
-    
-    # Create a combined figure with dual y-axes
-    combined_fig = go.Figure()
-    
-    # Add weight trace (left y-axis)
-    combined_fig.add_trace(
-        go.Scatter(
-            x=df['FltDate'],
-            y=df['ReportWeight'],
-            name='Weight',
-            mode='lines+markers',
-            line=dict(color='blue')
-        )
-    )
-    
-    # Add volume trace (right y-axis)
-    combined_fig.add_trace(
-        go.Scatter(
-            x=df['FltDate'],
-            y=df['ReportVolume'],
-            name='Volume',
-            mode='lines+markers',
-            line=dict(color='red'),
-            yaxis='y2'  # Use the secondary y-axis
-        )
-    )
-    
-    # Update the layout for dual y-axes
-    combined_fig.update_layout(
-        xaxis=dict(
-            title="Flight Date",
-            tickformat="%d %b",  # Format the date as "DD MMM" (e.g., "07 JUN")
-            tickmode="array",    # Force all ticks to be shown
-            tickvals=df['FltDate'],  # Show ticks for all dates in the dataset
-            ticktext=[date.strftime("%d %b").upper() for date in df['FltDate']]  # Format date labels
-        ),
-        yaxis=dict(
-            title=dict(
-                text="Weight (kg)",
-                font=dict(color="black")
-            ),
-            tickfont=dict(color="black"),
-            rangemode="tozero"  # Make y-axis start from zero
-        ),
-        yaxis2=dict(
-            title=dict(
-                text="Volume (cbm)",
-                font=dict(color="black")
-            ),
-            tickfont=dict(color="black"),
-            anchor="x",
-            overlaying="y",
-            side="right",
-            rangemode="tozero"  # Make y2-axis start from zero
-        ),
-        legend=dict(x=0.02, y=0.98),
-        hovermode="x unified"
-    )
-    
-    return combined_fig
+    try:
+        # Convert f_date to datetime if it's a string
+        if isinstance(f_date, str):
+            f_date_dt = datetime.strptime(f_date.split('T')[0], "%Y-%m-%d").date()
+        else:
+            f_date_dt = f_date
+            
+        conn = get_connection()
+        day_of_query = date.today()
+        fifteen_days_before = day_of_query - timedelta(days=15)
 
-# For local development
+        # Get prediction data
+        pred_df = pd.read_sql("SELECT * FROM dbo.CapacityTransaction", conn)
+        pred_df = pred_df[['ID', 'FltNo', 'FltDate', 'Origin', 'Destination', 'ReportWeight', 'ReportVolume']]
+
+        # Get passenger data
+        Pax_load = pd.read_sql("SELECT * FROM dbo.AirlinePAX WHERE FlightSchDept >= ?", 
+                               conn, params=[fifteen_days_before])
+
+        # Get flight schedule data
+        query = """
+            SELECT ID, FlightID, Source, Dest, FlightSchDept, CargoCapacity, UOM, 
+                   AirCraftType, TailNo, FlightCapacityWeight, FlightCapacityVolume, 
+                   DepartedWeight, AvailableWeight, AvailableVolume 
+            FROM dbo.AirlineScheduleRouteForecast 
+            WHERE Source = ? AND Dest = ? AND FlightID = ? AND AirCraftType NOT IN ('323', '32S', 'ATR') 
+                  AND AirCraftType IS NOT NULL AND FlightSchDept >= ?
+        """
+        ASRF_df = pd.read_sql(query, conn, params=[origin, destination, f_no, fifteen_days_before])
+
+        # Merge passenger data
+        ASRF_df = ASRF_df.merge(
+            Pax_load[['ID', 'ExpectedPAXCount', 'AVGBagPerPAX', 'Underload', 'ExpectedBaggage',
+                      'CapacityWeightHold', 'CapacityVolumeHold']], 
+            on='ID', 
+            how='left'
+        )
+        ASRF_df.dropna(subset=['ExpectedPAXCount'], inplace=True)
+
+        # Calculate derived metrics
+        ASRF_df['DepartedWeight'] = ASRF_df['DepartedWeight'].astype(float)
+        ASRF_df['TOTAL CARGO'] = ASRF_df['DepartedWeight'] + ASRF_df['Underload']
+        ASRF_df['BaggageVolume'] = ASRF_df['ExpectedPAXCount'] * ASRF_df['AVGBagPerPAX'] * 0.067  # Average bag volume in cubic meters
+        ASRF_df['ReportVolume'] = (
+            ASRF_df['CapacityVolumeHold'].astype(float) - ASRF_df['BaggageVolume'].astype(float)
+        ).round(0)
+
+        # Process dates
+        current_date = day_of_query  # fixed current date
+        start_date = f_date_dt - timedelta(days=15)  # 15 days before f_date
+
+        # Filter by flight number
+        pred_df = pred_df[pred_df['FltNo'] == f_no]
+        ASRF_df = ASRF_df[ASRF_df['FlightID'] == f_no]
+
+        # Convert date columns
+        pred_df['FltDate'] = pd.to_datetime(pred_df['FltDate']).dt.date
+        ASRF_df['FlightSchDept'] = pd.to_datetime(ASRF_df['FlightSchDept']).dt.date
+
+        # Filter prediction data: from current_date to f_date
+        pred_filtered = pred_df[(pred_df['FltDate'] >= current_date) & (pred_df['FltDate'] <= f_date_dt)][
+            ['FltNo', 'FltDate', 'Origin', 'Destination', 'ReportWeight', 'ReportVolume']
+        ]
+        pred_filtered = pred_filtered.rename(columns={
+            'ReportWeight': 'Weight',
+            'FltDate': 'Date',
+            'ReportVolume': 'Volume'
+        })
+        pred_filtered['Data_From'] = 'Pred'
+
+        # Filter actual data: from start_date to the day before current_date
+        asrf_filtered = ASRF_df[(ASRF_df['FlightSchDept'] >= start_date) & (ASRF_df['FlightSchDept'] < current_date)][
+            ['FlightID', 'Source', 'Dest', 'FlightSchDept', 'TOTAL CARGO', 'ReportVolume']
+        ]
+        asrf_filtered = asrf_filtered.rename(columns={
+            'TOTAL CARGO': 'Weight',
+            'FlightSchDept': 'Date',
+            'FlightID': 'FltNo',
+            'Source': 'Origin',
+            'Dest': 'Destination',
+            'ReportVolume': 'Volume'
+        })
+        asrf_filtered['Data_From'] = 'Actual'
+
+        # Combine both datasets and sort by date
+        combined_df = pd.concat([pred_filtered, asrf_filtered], ignore_index=True).sort_values(by='Date')
+
+        # Group data by date and type
+        daily_data = combined_df.groupby(['Date', 'Data_From'])[['Weight', 'Volume']].sum().unstack().sort_index()
+
+        # Check if we have data to display
+        if daily_data.empty:
+            return html.Div("No data found for the specified parameters", className="text-center")
+
+        # Create plotly figure with dual Y-axis
+        fig = go.Figure()
+
+        # === Weight (Primary Y-axis on the left) ===
+        # Actual Weight (green)
+        if 'Actual' in daily_data['Weight']:
+            fig.add_trace(go.Scatter(
+                x=daily_data.index,
+                y=daily_data['Weight']['Actual'],
+                mode='lines+markers',
+                name='Actual Weight',
+                line=dict(color='green'),
+                yaxis='y1'
+            ))
+
+        # Predicted Weight (blue)
+        if 'Pred' in daily_data['Weight']:
+            fig.add_trace(go.Scatter(
+                x=daily_data.index,
+                y=daily_data['Weight']['Pred'],
+                mode='lines+markers',
+                name='Predicted Weight',
+                line=dict(color='blue'),
+                yaxis='y1'
+            ))
+
+        # Transition line for Weight if both actual and predicted data exist
+        if 'Actual' in daily_data['Weight'] and 'Pred' in daily_data['Weight']:
+            actual_series = daily_data['Weight']['Actual'].dropna()
+            pred_series = daily_data['Weight']['Pred'].dropna()
+            if not actual_series.empty and not pred_series.empty:
+                fig.add_trace(go.Scatter(
+                    x=[actual_series.index[-1], pred_series.index[0]],
+                    y=[actual_series.iloc[-1], pred_series.iloc[0]],
+                    mode='lines',
+                    name='Weight Transition',
+                    line=dict(color='blue', dash='dot'),
+                    showlegend=False,
+                    yaxis='y1'
+                ))
+
+        # === Volume (Secondary Y-axis on the right) ===
+        # Actual Volume (red)
+        if 'Actual' in daily_data['Volume']:
+            fig.add_trace(go.Scatter(
+                x=daily_data.index,
+                y=daily_data['Volume']['Actual'],
+                mode='lines+markers',
+                name='Actual Volume',
+                line=dict(color='red'),
+                yaxis='y2'
+            ))
+
+        # Predicted Volume (orange)
+        if 'Pred' in daily_data['Volume']:
+            fig.add_trace(go.Scatter(
+                x=daily_data.index,
+                y=daily_data['Volume']['Pred'],
+                mode='lines+markers',
+                name='Predicted Volume',
+                line=dict(color='orange'),
+                yaxis='y2'
+            ))
+
+        # Transition line for Volume if both actual and predicted data exist
+        if 'Actual' in daily_data['Volume'] and 'Pred' in daily_data['Volume']:
+            actual_vol_series = daily_data['Volume']['Actual'].dropna()
+            pred_vol_series = daily_data['Volume']['Pred'].dropna()
+            if not actual_vol_series.empty and not pred_vol_series.empty:
+                fig.add_trace(go.Scatter(
+                    x=[actual_vol_series.index[-1], pred_vol_series.index[0]],
+                    y=[actual_vol_series.iloc[-1], pred_vol_series.iloc[0]],
+                    mode='lines',
+                    name='Volume Transition',
+                    line=dict(color='orange', dash='dot'),
+                    showlegend=False,
+                    yaxis='y2'
+                ))
+
+        # Calculate the max y-value for the vertical line
+        max_weight = 0
+        if 'Actual' in daily_data['Weight'] and not daily_data['Weight']['Actual'].empty:
+            max_weight = max(max_weight, daily_data['Weight']['Actual'].max())
+        if 'Pred' in daily_data['Weight'] and not daily_data['Weight']['Pred'].empty:
+            max_weight = max(max_weight, daily_data['Weight']['Pred'].max())
+        max_weight = max_weight + 2000  # Add padding
+
+        # Update layout with dual Y-axis
+        fig.update_layout(
+            title=f'Cargo Trend and Forecast for Flight {f_no} ({origin} → {destination})',
+            xaxis_title='Date',
+            yaxis=dict(
+                title='Weight (kg)',
+                rangemode='tozero',
+            ),
+            yaxis2=dict(
+                title='Volume (m³)',
+                overlaying='y',
+                side='right',
+                rangemode='tozero'
+            ),
+            xaxis=dict(
+                tickangle=45,
+                tickmode='linear',
+                dtick='D1',
+                tickformat='%d %b',
+            ),
+            legend=dict(
+                x=1.02,        # Just outside the right side
+                y=1,           # Align to top
+                xanchor='left',
+                yanchor='top',
+                bgcolor='rgba(255,255,255,0.8)',  # Semi-transparent background
+                bordercolor='black',
+                borderwidth=1
+            ),
+            template='plotly_white',
+            shapes=[
+                dict(
+                    type='line',
+                    x0=current_date,
+                    x1=current_date,
+                    y0=0,
+                    y1=max_weight,
+                    line=dict(color='black', width=2, dash='dot'),
+                    xref='x',
+                    yref='y'
+                )
+            ],
+            annotations=[
+                dict(
+                    x=current_date,
+                    y=max_weight,
+                    xref="x",
+                    yref="y",
+                    text="Today",
+                    showarrow=True,
+                    arrowhead=2,
+                    ax=0,
+                    ay=-40
+                )
+            ],
+            margin=dict(l=50, r=100, t=60, b=50),  # Reduced top margin
+            autosize=True,  # Enable autosize for responsiveness
+            height=None,    # Let height be determined by container
+        )
+
+        return dcc.Graph(
+            figure=fig,
+            style={
+                'height': '100%',  # Take full height of parent container
+                'width': '100%'    # Take full width of parent container
+            },
+            config={
+                'responsive': True,  # Enable responsiveness
+                'displayModeBar': False  # Hide the mode bar for cleaner appearance
+            }
+        )
+    
+    except Exception as e:
+        return html.Div(f"Error: {str(e)}", className="text-center text-danger")
+
 if __name__ == '__main__':
-    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT',8050)))
+    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8050))
