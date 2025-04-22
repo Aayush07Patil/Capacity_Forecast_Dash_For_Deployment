@@ -23,10 +23,10 @@ current_flight_data = {
 # Database connection setup
 def get_connection():
     # For production, use environment variables for these values
-    server = os.getenv("DB_SERVER", "qidtestingindia.database.windows.net")
-    database = os.getenv("DB_NAME", "rm-demo-erp-db")
-    username = os.getenv("DB_USERNAME", "rmdemodeploymentuser")
-    password = os.getenv("DB_PASSWORD", "rm#demo#2515")
+    server =  "qidtestingindia.database.windows.net"
+    database = "rm-demo-erp-db"
+    username = "rmdemodeploymentuser"
+    password =  "rm#demo#2515"
     conn_str = (
         'DRIVER={ODBC Driver 17 for SQL Server};'
         f'SERVER={server};'
@@ -369,4 +369,4 @@ def update_graph(n_intervals):
         return html.Div(f"Error: {str(e)}", className="text-center text-danger")
 
 if __name__ == '__main__':
-    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8050))
+    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
