@@ -143,10 +143,11 @@ def update_graph(n_intervals):
         ASRF_df = pd.read_sql(query, conn, params=[origin, destination, f_no, fifteen_days_before])
 
         # Merge passenger data
+        merge_cols = ['FlightID', 'Source', 'Dest', 'FlightSchDept']
+
         ASRF_df = ASRF_df.merge(
-            Pax_load[['ID', 'ExpectedPAXCount', 'AVGBagPerPAX', 'Underload', 'ExpectedBaggage',
-                      'CapacityWeightHold', 'CapacityVolumeHold']], 
-            on='ID', 
+            Pax_load[merge_cols + ['ExpectedPAXCount', 'AVGBagPerPAX', 'Underload', 'ExpectedBaggage', 'CapacityWeightHold', 'CapacityVolumeHold']],
+            on=merge_cols,
             how='left'
         )
         ASRF_df.dropna(subset=['ExpectedPAXCount'], inplace=True)
