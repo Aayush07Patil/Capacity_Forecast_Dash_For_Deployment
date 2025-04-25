@@ -154,7 +154,7 @@ def update_graph(n_intervals):
 
         # Calculate derived metrics
         ASRF_df['DepartedWeight'] = ASRF_df['DepartedWeight'].astype(float)
-        ASRF_df['TOTAL CARGO'] = ASRF_df['DepartedWeight'] + ASRF_df['Underload']
+        ASRF_df['TOTAL CARGO'] = ASRF_df['DepartedWeight'].fillna(0) + ASRF_df['Underload'].fillna(0)
         ASRF_df['BaggageVolume'] = ASRF_df['ExpectedPAXCount'] * ASRF_df['AVGBagPerPAX'] * 0.067  # Average bag volume in cubic meters
         ASRF_df['ReportVolume'] = (
             ASRF_df['CapacityVolumeHold'].astype(float) - ASRF_df['BaggageVolume'].astype(float)
