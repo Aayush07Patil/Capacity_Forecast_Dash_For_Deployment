@@ -346,7 +346,11 @@ def update_graph(n_intervals):
 
         # Update layout with dual Y-axis
         fig.update_layout(
-            title=f'Cargo Trend and Forecast',
+            title=dict(
+                text='Cargo trend and Forecast',
+                x=0.5,  # Center title
+                y=0.98  # Position near top
+            ),
             xaxis_title='Date',
             yaxis=dict(
                 title='Weight (kg)',
