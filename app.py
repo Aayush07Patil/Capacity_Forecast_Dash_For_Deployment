@@ -30,7 +30,7 @@ def get_connection():
         password = os.environ.get('DB_PASSWORD', '')
         
         # Check if we have all the required connection details
-        if not all([db_server, db_name, db_user, db_password]):
+        if not all([server, database, username, password]):
             print("Missing database connection details. Using sample data instead...")
             raise Exception("Missing database connection details")
 
