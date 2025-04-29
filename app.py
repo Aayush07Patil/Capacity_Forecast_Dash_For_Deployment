@@ -29,10 +29,12 @@ def get_connection():
         username = os.environ.get('DB_USER', '')
         password = os.environ.get('DB_PASSWORD', '')
         
+        # Check if we have all the required connection details
         if not all([db_server, db_name, db_user, db_password]):
             print("Missing database connection details. Using sample data instead...")
             raise Exception("Missing database connection details")
 
+        
         conn_str = (
             'DRIVER={ODBC Driver 17 for SQL Server};'
             f'SERVER={server};'
@@ -399,4 +401,4 @@ def update_graph(n_intervals):
         return html.Div(f"Error: {str(e)}", className="text-center text-danger")
 
 if __name__ == '__main__':
-    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
+    app.run_server(debug=False, host='0.0.0.0',port=int(os.environ.get('PORT',8050)))
