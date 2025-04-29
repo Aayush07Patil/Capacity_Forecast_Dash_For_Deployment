@@ -50,19 +50,24 @@ def get_connection():
         print(f"Database connection error: {e}")
         raise
 
-# Layout - simplified without input fields
+# Layout - simplified without input fields with loading circle added
 app.layout = html.Div([
-    # No title or information display - clean interface for iframe embedding
-    
-    # Graph container with responsive layout
-    html.Div(
-        id="graph-container",
-        style={
-            "width": "100%", 
-            "height": "100vh",  # Use viewport height
-            "padding": "0px",   # Remove padding
-            "margin": "0px"     # Remove margin
-        }
+    # Graph container with responsive layout and loading overlay
+    dcc.Loading(
+        id="loading-graph",
+        type="circle",
+        color="#119DFF",
+        children=[
+            html.Div(
+                id="graph-container",
+                style={
+                    "width": "100%", 
+                    "height": "100vh",  # Use viewport height
+                    "padding": "0px",   # Remove padding
+                    "margin": "0px"     # Remove margin
+                }
+            )
+        ]
     ),
     
     # Add interval component to trigger updates periodically
@@ -141,7 +146,14 @@ def update_graph(n_intervals):
     # Check if we have all required data
     if not all([f_no, f_date, origin, destination]):
         # Return empty message if missing data
-        return html.Div("Waiting for flight data...", className="text-center p-5")
+        return html.Div("Waiting for flight data...", 
+                        style={
+                            "display": "flex",
+                            "justifyContent": "center",
+                            "alignItems": "center",
+                            "height": "100%",
+                            "fontSize": "16px"
+                        })
     
     try:
         # Convert f_date to datetime if it's a string
@@ -236,7 +248,14 @@ def update_graph(n_intervals):
 
         # Check if we have data to display
         if daily_data.empty:
-            return html.Div("No data found for the specified parameters", className="text-center")
+            return html.Div("No data found for the specified parameters", 
+                            style={
+                                "display": "flex",
+                                "justifyContent": "center",
+                                "alignItems": "center",
+                                "height": "100%",
+                                "fontSize": "16px"
+                            })
 
         # Create plotly figure with dual Y-axis
         fig = go.Figure()
@@ -398,7 +417,15 @@ def update_graph(n_intervals):
         )
     
     except Exception as e:
-        return html.Div(f"Error: {str(e)}", className="text-center text-danger")
+        return html.Div(f"Error: {str(e)}", 
+                        style={
+                            "display": "flex",
+                            "justifyContent": "center",
+                            "alignItems": "center",
+                            "height": "100%",
+                            "fontSize": "16px",
+                            "color": "red"
+                        })
 
 if __name__ == '__main__':
     app.run_server(debug=False, host='0.0.0.0',port=int(os.environ.get('PORT',8050)))
