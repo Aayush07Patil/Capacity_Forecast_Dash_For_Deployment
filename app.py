@@ -20,24 +20,33 @@ current_flight_data = {
     "flight_destination": ""
 }
 
-# Database connection setup
+# Database connection setup with environment variables
 def get_connection():
-    # For production, use environment variables for these values
-    server =  "qidtestingindia.database.windows.net"
-    database = "rm-demo-erp-db"
-    username = "rmdemodeploymentuser"
-    password =  "rm#demo#2515"
-    conn_str = (
-        'DRIVER={ODBC Driver 17 for SQL Server};'
-        f'SERVER={server};'
-        f'DATABASE={database};'
-        f'UID={username};'
-        f'PWD={password};'
-        'Encrypt=yes;'
-        'TrustServerCertificate=no;'
-        'Connection Timeout=30;'
-    )
-    return pyodbc.connect(conn_str)
+    try:
+        # Get database connection details from environment variables
+        server = os.environ.get('DB_SERVER', '')
+        database = os.environ.get('DB_NAME', '')
+        username = os.environ.get('DB_USER', '')
+        password = os.environ.get('DB_PASSWORD', '')
+        
+        if not all([db_server, db_name, db_user, db_password]):
+            print("Missing database connection details. Using sample data instead...")
+            raise Exception("Missing database connection details")
+
+        conn_str = (
+            'DRIVER={ODBC Driver 17 for SQL Server};'
+            f'SERVER={server};'
+            f'DATABASE={database};'
+            f'UID={username};'
+            f'PWD={password};'
+            'Encrypt=yes;'
+            'TrustServerCertificate=no;'
+            'Connection Timeout=30;'
+        )
+        return pyodbc.connect(conn_str)
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise
 
 # Layout - simplified without input fields
 app.layout = html.Div([
@@ -93,7 +102,27 @@ def update_data():
         print(f"Error processing data: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
 
-# Removed callback for displaying flight information as we no longer have those UI elements
+# New API endpoint to reset data
+@server.route('/reset-data', methods=['POST'])
+def reset_data():
+    global current_flight_data
+    
+    try:
+        # Reset the current flight data to empty values
+        current_flight_data = {
+            "flight_no": "",
+            "flight_date": datetime.now().date().isoformat(),
+            "flight_origin": "",
+            "flight_destination": ""
+        }
+        
+        print("Dashboard data reset successfully")
+        
+        return jsonify({"status": "success", "message": "Data reset successfully"}), 200
+    
+    except Exception as e:
+        print(f"Error resetting data: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 # Callback to update the graph based on stored flight data
 @callback(
