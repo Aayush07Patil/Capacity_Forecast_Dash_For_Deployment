@@ -163,88 +163,35 @@ def update_graph(n_intervals):
             f_date_dt = f_date
             
         conn = get_connection()
-        day_of_query = date.today()
-        fifteen_days_before = day_of_query - timedelta(days=15)
+        current_date = date.today()
+        fifteen_days_before = f_date_dt - timedelta(days=15)  # 15 days before target flight date
 
-        # Get prediction data
-        pred_df = pd.read_sql("SELECT * FROM dbo.CapacityTransaction", conn)
-        pred_df = pred_df[['ID', 'FltNo', 'FltDate', 'Origin', 'Destination', 'ReportWeight', 'ReportVolume']]
-
-        # Get passenger data
-        Pax_load = pd.read_sql("SELECT * FROM dbo.AirlinePAX WHERE FlightSchDept >= ?", 
-                               conn, params=[fifteen_days_before])
-
-        # Get flight schedule data
+        # Get data from CapacityTransaction table with appropriate filters
         query = """
-            SELECT ID, FlightID, Source, Dest, FlightSchDept, CargoCapacity, UOM, 
-                   AirCraftType, TailNo, FlightCapacityWeight, FlightCapacityVolume, 
-                   DepartedWeight, AvailableWeight, AvailableVolume 
-            FROM dbo.AirlineScheduleRouteForecast 
-            WHERE Source = ? AND Dest = ? AND FlightID = ? AND AirCraftType NOT IN ('323', '32S', 'ATR') 
-                  AND AirCraftType IS NOT NULL AND FlightSchDept >= ?
+            SELECT ID, FltNo, FltDate, Origin, Destination, ReportWeight, ReportVolume, OBW
+            FROM dbo.CapacityTransaction
+            WHERE FltNo = ? AND Origin = ? AND Destination = ? 
+                  AND FltDate >= ? AND FltDate <= ?
         """
-        ASRF_df = pd.read_sql(query, conn, params=[origin, destination, f_no, fifteen_days_before])
-
-        # Merge passenger data
-        merge_cols = ['FlightID', 'Source', 'Dest', 'FlightSchDept']
-
-        ASRF_df = ASRF_df.merge(
-            Pax_load[merge_cols + ['ExpectedPAXCount', 'AVGBagPerPAX', 'Underload', 'ExpectedBaggage', 'CapacityWeightHold', 'CapacityVolumeHold']],
-            on=merge_cols,
-            how='left'
+        capacity_df = pd.read_sql(query, conn, params=[f_no, origin, destination, fifteen_days_before, f_date_dt])
+        
+        # Convert FltDate to datetime
+        capacity_df['FltDate'] = pd.to_datetime(capacity_df['FltDate']).dt.date
+        
+        # Create a new Data_From column
+        capacity_df['Data_From'] = capacity_df['FltDate'].apply(
+            lambda x: 'Actual' if x < current_date else 'Pred'
         )
-        ASRF_df.dropna(subset=['ExpectedPAXCount'], inplace=True)
-
-        # Calculate derived metrics
-        ASRF_df['DepartedWeight'] = ASRF_df['DepartedWeight'].astype(float)
-        ASRF_df['TOTAL CARGO'] = ASRF_df['DepartedWeight'].fillna(0) + ASRF_df['Underload'].fillna(0)
-        ASRF_df['BaggageVolume'] = ASRF_df['ExpectedPAXCount'] * ASRF_df['AVGBagPerPAX'] * 0.067  # Average bag volume in cubic meters
-        ASRF_df['ReportVolume'] = (
-            ASRF_df['CapacityVolumeHold'].astype(float) - ASRF_df['BaggageVolume'].astype(float)
-        ).round(0)
-
-        # Process dates
-        current_date = day_of_query  # fixed current date
-        start_date = f_date_dt - timedelta(days=15)  # 15 days before f_date
-
-        # Filter by flight number
-        pred_df = pred_df[pred_df['FltNo'] == f_no]
-        ASRF_df = ASRF_df[ASRF_df['FlightID'] == f_no]
-
-        # Convert date columns
-        pred_df['FltDate'] = pd.to_datetime(pred_df['FltDate']).dt.date
-        ASRF_df['FlightSchDept'] = pd.to_datetime(ASRF_df['FlightSchDept']).dt.date
-
-        # Filter prediction data: from current_date to f_date
-        pred_filtered = pred_df[(pred_df['FltDate'] >= current_date) & (pred_df['FltDate'] <= f_date_dt)][
-            ['FltNo', 'FltDate', 'Origin', 'Destination', 'ReportWeight', 'ReportVolume']
-        ]
-        pred_filtered = pred_filtered.rename(columns={
+        
+        # Rename columns for consistency with your existing code
+        capacity_df = capacity_df.rename(columns={
             'ReportWeight': 'Weight',
-            'FltDate': 'Date',
-            'ReportVolume': 'Volume'
+            'ReportVolume': 'Volume',
+            'FltDate': 'Date'
         })
-        pred_filtered['Data_From'] = 'Pred'
-
-        # Filter actual data: from start_date to the day before current_date
-        asrf_filtered = ASRF_df[(ASRF_df['FlightSchDept'] >= start_date) & (ASRF_df['FlightSchDept'] < current_date)][
-            ['FlightID', 'Source', 'Dest', 'FlightSchDept', 'TOTAL CARGO', 'ReportVolume']
-        ]
-        asrf_filtered = asrf_filtered.rename(columns={
-            'TOTAL CARGO': 'Weight',
-            'FlightSchDept': 'Date',
-            'FlightID': 'FltNo',
-            'Source': 'Origin',
-            'Dest': 'Destination',
-            'ReportVolume': 'Volume'
-        })
-        asrf_filtered['Data_From'] = 'Actual'
-
-        # Combine both datasets and sort by date
-        combined_df = pd.concat([pred_filtered, asrf_filtered], ignore_index=True).sort_values(by='Date')
-
+        
         # Group data by date and type
-        daily_data = combined_df.groupby(['Date', 'Data_From'])[['Weight', 'Volume']].sum().unstack().sort_index()
+        daily_data = capacity_df.groupby(['Date', 'Data_From'])[['Weight', 'Volume']].sum().unstack().sort_index()
 
         # Check if we have data to display
         if daily_data.empty:
