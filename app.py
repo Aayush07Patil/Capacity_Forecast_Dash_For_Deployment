@@ -73,7 +73,7 @@ app.layout = html.Div([
     # Add interval component to trigger updates periodically
     dcc.Interval(
         id='interval-component',
-        interval=1200000,  # in milliseconds (5 minutes)
+        interval=1200000,  # in milliseconds (20 minutes)
         n_intervals=0
     )
 ], style={
@@ -165,6 +165,7 @@ def update_graph(n_intervals):
         conn = get_connection()
         current_date = date.today()
         fifteen_days_before = f_date_dt - timedelta(days=15)  # 15 days before target flight date
+        date_to_start = f_date_dt + timedelta(days=1)
 
         # Get data from CapacityTransaction table with appropriate filters
         query = """
@@ -173,7 +174,7 @@ def update_graph(n_intervals):
             WHERE FltNo = ? AND Origin = ? AND Destination = ? 
                   AND FltDate >= ? AND FltDate <= ?
         """
-        capacity_df = pd.read_sql(query, conn, params=[f_no, origin, destination, fifteen_days_before, f_date_dt])
+        capacity_df = pd.read_sql(query, conn, params=[f_no, origin, destination, fifteen_days_before, date_to_start])
         
         # Convert FltDate to datetime
         capacity_df['FltDate'] = pd.to_datetime(capacity_df['FltDate']).dt.date
@@ -206,6 +207,10 @@ def update_graph(n_intervals):
 
         # Create plotly figure with dual Y-axis
         fig = go.Figure()
+        
+        # Create a date range to ensure all dates are shown in the x-axis
+        # This ensures May 8 is included even if there's no data for it
+        all_dates = pd.date_range(start=fifteen_days_before, end=f_date_dt).date
 
         # === Weight (Primary Y-axis on the left) ===
         # Actual Weight (green)
@@ -291,6 +296,35 @@ def update_graph(n_intervals):
             max_weight = max(max_weight, daily_data['Weight']['Pred'].max())
         max_weight = max_weight + 2000  # Add padding
 
+        # Initialize empty lists for shapes and annotations
+        shapes = []
+        annotations = []
+
+        # Only add the Today line and annotation if current_date is within our date range
+        if fifteen_days_before <= current_date <= f_date_dt:
+            shapes.append(dict(
+                type='line',
+                x0=current_date,
+                x1=current_date,
+                y0=0,
+                y1=max_weight,
+                line=dict(color='black', width=2, dash='dot'),
+                xref='x',
+                yref='y'
+            ))
+            
+            annotations.append(dict(
+                x=current_date,
+                y=max_weight,
+                xref="x",
+                yref="y",
+                text="Today",
+                showarrow=True,
+                arrowhead=2,
+                ax=0,
+                ay=-40
+            ))
+
         # Update layout with dual Y-axis
         fig.update_layout(
             title=dict(
@@ -314,6 +348,8 @@ def update_graph(n_intervals):
                 tickmode='linear',
                 dtick='D1',
                 tickformat='%d %b',
+                # Explicitly set the range to include all dates including flight date
+                range=[fifteen_days_before, f_date_dt]
             ),
             legend=dict(
                 x=1.05,        # Just outside the right side
@@ -325,31 +361,8 @@ def update_graph(n_intervals):
                 borderwidth=1
             ),
             template='plotly_white',
-            shapes=[
-                dict(
-                    type='line',
-                    x0=current_date,
-                    x1=current_date,
-                    y0=0,
-                    y1=max_weight,
-                    line=dict(color='black', width=2, dash='dot'),
-                    xref='x',
-                    yref='y'
-                )
-            ],
-            annotations=[
-                dict(
-                    x=current_date,
-                    y=max_weight,
-                    xref="x",
-                    yref="y",
-                    text="Today",
-                    showarrow=True,
-                    arrowhead=2,
-                    ax=0,
-                    ay=-40
-                )
-            ],
+            shapes=shapes,  # Use the conditionally created shapes list
+            annotations=annotations,  # Use the conditionally created annotations list
             margin=dict(l=50, r=100, t=60, b=50),  # Reduced top margin
             autosize=True,  # Enable autosize for responsiveness
             height=None,    # Let height be determined by container
