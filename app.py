@@ -262,7 +262,7 @@ def update_graph(n_intervals):
                 name='Actual Volume',
                 line=dict(color='red'),
                 yaxis='y2',
-                hovertemplate = 'Date: %{x}<br>Volume: %{y} Kg<extra></extra>'
+                hovertemplate = 'Date: %{x}<br>Volume: %{y} m³<extra></extra>'
             ))
 
         # Predicted Volume (orange)
@@ -274,7 +274,7 @@ def update_graph(n_intervals):
                 name='Predicted Volume',
                 line=dict(color='orange'),
                 yaxis='y2',
-                hovertemplate = 'Date: %{x}<br>Volume: %{y} Kg<extra></extra>'
+                hovertemplate = 'Date: %{x}<br>Volume: %{y} m³<extra></extra>'
             ))
 
         # Transition line for Volume if both actual and predicted data exist
