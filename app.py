@@ -219,9 +219,10 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Weight']['Actual'],
                 mode='lines+markers',
-                name='Actual Weight',
+                name='Actual Wt',
                 line=dict(color='green'),
-                yaxis='y1'
+                yaxis='y1',
+                hovertemplate = 'Date: %{x}<br>Weight: %{y} Kg<extra></extra>'
             ))
 
         # Predicted Weight (blue)
@@ -230,9 +231,10 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Weight']['Pred'],
                 mode='lines+markers',
-                name='Predicted Weight',
+                name='Pred Wt',
                 line=dict(color='blue'),
-                yaxis='y1'
+                yaxis='y1',
+                hovertemplate = 'Date: %{x}<br>Weight: %{y} Kg<extra></extra>'
             ))
 
         # Transition line for Weight if both actual and predicted data exist
@@ -259,7 +261,8 @@ def update_graph(n_intervals):
                 mode='lines+markers',
                 name='Actual Volume',
                 line=dict(color='red'),
-                yaxis='y2'
+                yaxis='y2',
+                hovertemplate = 'Date: %{x}<br>Volume: %{y} Kg<extra></extra>'
             ))
 
         # Predicted Volume (orange)
@@ -270,7 +273,8 @@ def update_graph(n_intervals):
                 mode='lines+markers',
                 name='Predicted Volume',
                 line=dict(color='orange'),
-                yaxis='y2'
+                yaxis='y2',
+                hovertemplate = 'Date: %{x}<br>Volume: %{y} Kg<extra></extra>'
             ))
 
         # Transition line for Volume if both actual and predicted data exist
