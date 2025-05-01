@@ -219,7 +219,7 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Weight']['Actual'],
                 mode='lines+markers',
-                name='Actual Wt',
+                name='Actual Wt.',
                 line=dict(color='green'),
                 yaxis='y1',
                 hovertemplate = 'Date: %{x}<br>Weight: %{y} Kg<extra></extra>'
@@ -231,7 +231,7 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Weight']['Pred'],
                 mode='lines+markers',
-                name='Pred Wt',
+                name='Pred Wt.',
                 line=dict(color='blue'),
                 yaxis='y1',
                 hovertemplate = 'Date: %{x}<br>Weight: %{y} Kg<extra></extra>'
@@ -259,7 +259,7 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Volume']['Actual'],
                 mode='lines+markers',
-                name='Actual Volume',
+                name='Actual Vol.',
                 line=dict(color='red'),
                 yaxis='y2',
                 hovertemplate = 'Date: %{x}<br>Volume: %{y} m³<extra></extra>'
@@ -271,7 +271,7 @@ def update_graph(n_intervals):
                 x=daily_data.index,
                 y=daily_data['Volume']['Pred'],
                 mode='lines+markers',
-                name='Predicted Volume',
+                name='Predicted Vol.',
                 line=dict(color='orange'),
                 yaxis='y2',
                 hovertemplate = 'Date: %{x}<br>Volume: %{y} m³<extra></extra>'
